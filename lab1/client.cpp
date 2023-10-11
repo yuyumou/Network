@@ -1,9 +1,27 @@
 #include <iostream>
 #include <winsock2.h>
+#include <thread>
 
 using namespace std;
 
 #pragma comment(lib, "ws2_32.lib")
+
+void receiveMessages(SOCKET clientSocket) {
+    char buffer[1024];
+    int bytesRead;
+
+    while (true) {
+        bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
+        if (strcmp(buffer, "quit") == 0 || bytesRead <= 0) {
+            cout << "Server disconnected." << endl;
+            closesocket(clientSocket);
+            WSACleanup();
+            exit(1);
+        }
+        buffer[bytesRead] = '\0';
+        cout << "服务器端: " << buffer << endl;
+    }
+}
 
 int main() {
     WSADATA wsaData;
@@ -33,31 +51,20 @@ int main() {
         return 1;
     }
 
+    thread receiveThread(receiveMessages, clientSocket);
+
     char buffer[1024];
-    int bytesRead;
 
     while (true) {
-        // 发送客户端消息
-        cout << "客户端: ";
+       // cout << "客户端: ";
         cin.getline(buffer, sizeof(buffer));
-        send(clientSocket, buffer, strlen(buffer), 0);
 
+        send(clientSocket, buffer, strlen(buffer), 0);
         if (strcmp(buffer, "quit") == 0) {
             cout << "Client disconnected." << endl;
-            break;
-        }
-
-        // 接收服务器消息
-        bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (bytesRead <= 0) {
-            break;
-        }
-        buffer[bytesRead] = '\0';
-        cout << "服务器端: " << buffer << endl;
-
-        if (strcmp(buffer, "quit") == 0) {
-            cout << "Server disconnected." << endl;
-            break;
+            closesocket(clientSocket);
+            WSACleanup();
+            exit(1);
         }
     }
 
