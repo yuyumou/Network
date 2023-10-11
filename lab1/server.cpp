@@ -1,8 +1,27 @@
 #include <iostream>
 #include <winsock2.h>
+#include <thread>
 
 using namespace std;
+
 #pragma comment(lib, "ws2_32.lib")
+
+void receiveMessages(SOCKET clientSocket) {
+    char buffer[1024];
+    int bytesRead;
+
+    while (true) {
+        bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
+        if (strcmp(buffer, "quit") == 0 || bytesRead <= 0) {
+            cout << "Client disconnected." << endl;
+            closesocket(clientSocket);
+            WSACleanup();
+            exit(1);
+        }
+        buffer[bytesRead] = '\0';
+        cout << "客户端: " << buffer << endl;
+    }
+}
 
 int main() {
     WSADATA wsaData;
@@ -32,7 +51,7 @@ int main() {
         return 1;
     }
 
-    cout << "Server is listening on port 8000..." << endl;
+    cout << "等待连接ing." << endl;
 
     // 等待客户端连接
     SOCKET clientSocket;
@@ -47,31 +66,24 @@ int main() {
         return 1;
     }
 
+    thread receiveThread(receiveMessages, clientSocket);
+
     char buffer[1024];
     int bytesRead;
     cout << "---------------连接成功了--------------" << endl;
+    cout << "---------------这里是服务端--------------" << endl;
     while (true) {
-        // 接收客户端消息
-        bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (bytesRead <= 0) {
-            break;
-        }
-        buffer[bytesRead] = '\0';
-        cout << "客户端: " << buffer << endl;
-
-        if (strcmp(buffer, "quit") == 0) {
-            cout << "Client disconnected." << endl;
-            break;
-        }
-
-        // 发送服务器消息
-        cout << "服务器端: ";
+       // cout << "服务器端: ";
         cin.getline(buffer, sizeof(buffer));
-        send(clientSocket, buffer, strlen(buffer), 0);
 
+        send(clientSocket, buffer, strlen(buffer), 0);
         if (strcmp(buffer, "quit") == 0) {
             cout << "Server disconnected." << endl;
-            break;
+            closesocket(clientSocket);
+            closesocket(serverSocket);
+            WSACleanup();
+            exit(1);
+
         }
     }
 
