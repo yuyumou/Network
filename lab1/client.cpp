@@ -12,15 +12,16 @@ void receiveMessages(SOCKET clientSocket) {
 
     while (true) {
         bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (strcmp(buffer, "quit") == 0 || bytesRead <= 0) {
-            cout << "Server disconnected." << endl;
+        if (strcmp(buffer + sizeof(DWORD) + 3, "quit") == 0 || bytesRead <= 0) {
+            //cout << "Server disconnected." << endl;
             closesocket(clientSocket);
             WSACleanup();
+            //exit(1);
             break;
-            // exit(1);
         }
         buffer[bytesRead] = '\0';
-        cout << "服务器端: " << buffer << endl;
+        cout << buffer << endl;
+        // cout << "服务器转发: " << buffer << endl;
     }
 }
 
@@ -44,6 +45,10 @@ int main() {
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = inet_addr("192.168.101.1");  // 服务器的IP地址
     serverAddr.sin_port = htons(8000);  // 服务器的端口号
+   
+    
+    DWORD currentProcessId = GetCurrentProcessId();
+    cout << "Current Process ID: " << currentProcessId << endl;
 
     if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
         cout << "连接失败" << endl;
@@ -58,10 +63,12 @@ int main() {
 
     while (true) {
        // cout << "客户端: ";
-        cin.getline(buffer, sizeof(buffer));
+        sprintf(buffer, "%lu", currentProcessId);
+        strcat(buffer, " : ");
+        cin.getline(buffer+sizeof(currentProcessId)+3, sizeof(buffer));
 
         send(clientSocket, buffer, strlen(buffer), 0);
-        if (strcmp(buffer, "quit") == 0) {
+        if (strcmp(buffer+sizeof(currentProcessId)+3, "quit") == 0) {
             cout << "Client disconnected." << endl;
             closesocket(clientSocket);
             WSACleanup();
