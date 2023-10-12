@@ -1,26 +1,41 @@
 #include <iostream>
 #include <winsock2.h>
+#include <vector>
 #include <thread>
+#include <mutex>
 
 using namespace std;
 
 #pragma comment(lib, "ws2_32.lib")
 
-void receiveMessages(SOCKET clientSocket) {
+vector<SOCKET> clients;
+mutex mtx;
+
+void handleClient(SOCKET clientSocket) {
     char buffer[1024];
     int bytesRead;
 
     while (true) {
         bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (strcmp(buffer, "quit") == 0 || bytesRead <= 0) {
-            cout << "Client disconnected." << endl;
+        if (bytesRead <= 0) {
+            unique_lock<mutex> lock(mtx);
+            auto it = find(clients.begin(), clients.end(), clientSocket);
+            if (it != clients.end()) {
+                clients.erase(it);
+            }
             closesocket(clientSocket);
-            WSACleanup();
+            lock.unlock();
             break;
-            //exit(1);
         }
         buffer[bytesRead] = '\0';
-        cout << "客户端: " << buffer << endl;
+
+        unique_lock<mutex> lock(mtx);
+        for (SOCKET otherClient : clients) {
+            if (otherClient != clientSocket) {
+                send(otherClient, buffer, strlen(buffer), 0);
+            }
+        }
+        lock.unlock();
     }
 }
 
@@ -31,7 +46,6 @@ int main() {
         return 1;
     }
 
-    // 创建套接字
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET) {
         cout << "socket创建失败" << endl;
@@ -39,57 +53,42 @@ int main() {
         return 1;
     }
 
-    // 绑定地址和端口
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = inet_addr("192.168.101.1");
+    serverAddr.sin_addr.s_addr = inet_addr("192.168.101.1");;
     serverAddr.sin_port = htons(8000);
 
     if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cout << "连接失败" << endl;
+        cout << "绑定失败" << endl;
         closesocket(serverSocket);
         WSACleanup();
         return 1;
     }
 
-    cout << "等待连接ing." << endl;
+    cout << "服务器已开机" << endl;
 
-    // 等待客户端连接
-    SOCKET clientSocket;
-    sockaddr_in clientAddr;
-    int addrLen = sizeof(clientAddr);
     listen(serverSocket, 5);
-    clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &addrLen);
-    if (clientSocket == INVALID_SOCKET) {
-        cout << "接受失败" << endl;
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
 
-    thread receiveThread(receiveMessages, clientSocket);
-
-    char buffer[1024];
-    int bytesRead;
-    cout << "---------------连接成功了--------------" << endl;
-    cout << "---------------这里是服务端--------------" << endl;
     while (true) {
-       // cout << "服务器端: ";
-        cin.getline(buffer, sizeof(buffer));
-
-        send(clientSocket, buffer, strlen(buffer), 0);
-        if (strcmp(buffer, "quit") == 0) {
-            cout << "Server disconnected." << endl;
-            closesocket(clientSocket);
+        SOCKET clientSocket;
+        sockaddr_in clientAddr;
+        int addrLen = sizeof(clientAddr);
+        clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &addrLen);
+        if (clientSocket == INVALID_SOCKET) {
+            cout << "接受失败" << endl;
             closesocket(serverSocket);
             WSACleanup();
-            exit(1);
-
+            return 1;
         }
+
+        unique_lock<mutex> lock(mtx);
+        clients.push_back(clientSocket);
+        lock.unlock();
+
+        thread clientThread(handleClient, clientSocket);
+        clientThread.detach(); // 分离线程，不等待线程退出
     }
 
-    // 关闭套接字
-    closesocket(clientSocket);
     closesocket(serverSocket);
     WSACleanup();
 
