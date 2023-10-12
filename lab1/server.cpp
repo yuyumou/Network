@@ -16,7 +16,8 @@ void receiveMessages(SOCKET clientSocket) {
             cout << "Client disconnected." << endl;
             closesocket(clientSocket);
             WSACleanup();
-            exit(1);
+            break;
+            //exit(1);
         }
         buffer[bytesRead] = '\0';
         cout << "客户端: " << buffer << endl;
