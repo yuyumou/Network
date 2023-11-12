@@ -105,13 +105,32 @@ bool handshake() {
     header[CHECKSUM_BITS_START] = (u_char)(checksum & 0xFF);
     header[CHECKSUM_BITS_START + 1] = (u_char)(checksum >> 8);
     sendto(sendSocket, header, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, sizeof(SOCKADDR));
+    cout << "客户端成功发送第一次握手消息" << endl;
     memset(sendBuf, 0, PACKETSIZE);
     memcpy(sendBuf, header, HEADERSIZE);
-    // 接受第二次握手应答报文
+    sendSize = HEADERSIZE;
     char recvBuf[HEADERSIZE] = { 0 };
     int recvResult = 0;
+    while (true) {
+        died = true;
+        recvResult = recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
+        died = false;
+        // 接受ack
+        int ack = recvBuf[ACK_BITS_START] + (recvBuf[ACK_BITS_START + 1] << 8)
+            + (recvBuf[ACK_BITS_START + 2] << 16) + (recvBuf[ACK_BITS_START + 3] << 24);
+        if ((ack == 1111) ) { 
+            cout << "客户端成功收到第一次握手消息反馈" << endl;
+            break;
+        }
+        else {
+            cout << "客户端收第一次握手反馈消息失败" << endl;
+            return false;
+        }
+    }
 
 
+    memset(recvBuf, 0, HEADERSIZE);
+    // 接受第二次握手应答报文
     while (true) {
         died = true;
         recvResult = recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
@@ -146,7 +165,26 @@ bool handshake() {
     header[CHECKSUM_BITS_START + 1] = (u_char)(checksum >> 8);
     sendto(sendSocket, header, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, sizeof(SOCKADDR));
     cout << "客户端发送第三次握手消息" << endl;
-
+    memset(sendBuf, 0, PACKETSIZE);
+    memcpy(sendBuf, header, HEADERSIZE);
+    sendSize = HEADERSIZE;
+    recvResult = 0;
+    while (true) {
+        died = true;
+        recvResult = recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
+        died = false;
+        // 接受ack
+        int ack = recvBuf[ACK_BITS_START] + (recvBuf[ACK_BITS_START + 1] << 8)
+            + (recvBuf[ACK_BITS_START + 2] << 16) + (recvBuf[ACK_BITS_START + 3] << 24);
+        if ((ack == 3333)) {
+            cout << "客户端成功收到第三次握手消息反馈" << endl;
+            break;
+        }
+        else {
+            cout << "客户端收第三次握手反馈消息失败" << endl;
+            return false;
+        }
+    }
     cout << "第三次握手成功，握手结束" << endl;
     cout << "=============================================握手结束================================================================" << endl;
     return true;
