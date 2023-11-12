@@ -65,6 +65,15 @@ bool handshake() {
 			+ ((u_char)recvBuf[SEQ_BITS_START + 2] << 16) + ((u_char)recvBuf[SEQ_BITS_START + 3] << 24);
 
 		if (checksum == 0 && recvBuf[FLAG_BIT_POSITION] == 0b010) {
+			// 发送第一次握手应答报文
+			memset(header, 0, HEADERSIZE);
+			// 设置ack位，ack = seq of message 1 + 1
+			ack = 1111;
+			header[ACK_BITS_START] = (u_char)(ack & 0xFF);
+			header[ACK_BITS_START + 1] = (u_char)(ack >> 8);
+			header[ACK_BITS_START + 2] = (u_char)(ack >> 16);
+			header[ACK_BITS_START + 3] = (u_char)(ack >> 24);
+			sendto(serverSocket, header, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, sizeof(SOCKADDR));
 			cout << "第一次握手成功" << endl;
 			break;
 		}
@@ -108,6 +117,15 @@ bool handshake() {
 			+ ((u_char)recvBuf[ACK_BITS_START + 2] << 16) + ((u_char)recvBuf[ACK_BITS_START + 3] << 24);
 
 		if (checksum == 0 && ack == seq + 1 && recvBuf[FLAG_BIT_POSITION] == 0b100) {
+			// 发送第一次握手应答报文
+			memset(header, 0, HEADERSIZE);
+			// 设置ack位，ack = seq of message 1 + 1
+			ack = 3333;
+			header[ACK_BITS_START] = (u_char)(ack & 0xFF);
+			header[ACK_BITS_START + 1] = (u_char)(ack >> 8);
+			header[ACK_BITS_START + 2] = (u_char)(ack >> 16);
+			header[ACK_BITS_START + 3] = (u_char)(ack >> 24);
+			sendto(serverSocket, header, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, sizeof(SOCKADDR));
 			cout << "第三次握手成功" << endl;
 			break;
 		}
