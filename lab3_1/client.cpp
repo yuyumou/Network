@@ -345,39 +345,58 @@ void wavehand() {
     header[CHECKSUM_BITS_START] = (u_char)(checksum & 0xFF);
     header[CHECKSUM_BITS_START + 1] = (u_char)(checksum >> 8);
     sendto(sendSocket, header, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, sizeof(SOCKADDR));
-    cout << "send the First Wavehand message!" << endl;
 
-    // 接收第二次挥手应答报文
+    cout << "客户端发送第一次挥手消息" << endl;
+    memset(sendBuf, 0, PACKETSIZE);
+    memcpy(sendBuf, header, HEADERSIZE);
+    sendSize = HEADERSIZE;
     char recvBuf[HEADERSIZE] = { 0 };
     int recvResult = 0;
     while (true) {
-        recvResult = recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
+        died = true;
+        recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
+        died = false;
         // 接受ack
-        ack = recvBuf[ACK_BITS_START] + (recvBuf[ACK_BITS_START + 1] << 8)
+        int ack = recvBuf[ACK_BITS_START] + (recvBuf[ACK_BITS_START + 1] << 8)
             + (recvBuf[ACK_BITS_START + 2] << 16) + (recvBuf[ACK_BITS_START + 3] << 24);
-        if ((ack == seq + 1) && (recvBuf[FLAG_BIT_POSITION] == 0b100)) {
-            cout << "successfully received the Second Wavehand message!" << endl;
+        if ((ack == 1111)) {
+            cout << "客户端成功收到第一次挥手消息反馈" << endl;
             break;
         }
         else {
-            cout << "failed to received the correct Second Wavehand message, Wavehand failed!" << endl;
+            cout << "客户端接受第一次挥手反馈消息失败" << endl;
+            return ;
+        }
+    }
+
+    // 接收第二次挥手应答报文
+    //char recvBuf[HEADERSIZE] = { 0 };
+    //int recvResult = 0;
+    while (true) {
+        died = true;
+        recvResult = recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
+        died = false;
+        if ((recvBuf[FLAG_BIT_POSITION] == 0b100)) {
+            cout << "成功接收第二次挥手消息" << endl;
+            break;
+        }
+        else {
+            cout << "接收第二次挥手消息失败" << endl;
             return;
         }
     }
 
     // 接收第三次挥手请求报文
     while (true) {
-        
+        died = true;
         recvResult = recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
-        // 接受ack
-        ack = recvBuf[ACK_BITS_START] + (recvBuf[ACK_BITS_START + 1] << 8)
-            + (recvBuf[ACK_BITS_START + 2] << 16) + (recvBuf[ACK_BITS_START + 3] << 24);
-        if ((ack == seq + 1) && (recvBuf[FLAG_BIT_POSITION] == 0b101)) {
-            cout << "successfully received the Third Wavehand message!" << endl;
+        died = false;
+        if ((recvBuf[FLAG_BIT_POSITION] == 0b101)) {
+            cout << "成功接收第三次挥手消息" << endl;
             break;
         }
         else {
-            cout << "failed to received the correct Third Wavehand message, Wavehand failed!" << endl;
+            cout << "接收第三次挥手消息失败" << endl;
             return;
         }
     }
@@ -404,9 +423,24 @@ void wavehand() {
     header[CHECKSUM_BITS_START] = (u_char)(checksum & 0xFF);
     header[CHECKSUM_BITS_START + 1] = (u_char)(checksum >> 8);
     sendto(sendSocket, header, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, sizeof(SOCKADDR));
-    cout << "send the Forth Wavehand message!" << endl;
-
-    cout << "Wavehand successfully!" << endl;
+    cout << "发送第四条挥手消息" << endl;
+    while (true) {
+        died = true;
+        recvfrom(sendSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&serverAddr, &len);
+        died = false;
+        // 接受ack
+        int ack = recvBuf[ACK_BITS_START] + (recvBuf[ACK_BITS_START + 1] << 8)
+            + (recvBuf[ACK_BITS_START + 2] << 16) + (recvBuf[ACK_BITS_START + 3] << 24);
+        if ((ack == 4444)) {
+            cout << "客户端成功收到第四次挥手消息反馈" << endl;
+            break;
+        }
+        else {
+            cout << "客户端接受第四次挥手反馈消息失败" << endl;
+            return;
+        }
+    }
+    cout << "结束 连接！！！" << endl;
     return;
 }
 
@@ -463,6 +497,7 @@ int main() {
                 totalTime += (double)(l - s) / CLOCKS_PER_SEC;
             }
         }
+        cout << "=============================================准备断连================================================================" << endl;
         wavehand();
         cout << endl << "send time: " << totalTime << " s." << endl;
         cout << "total size: " << totalLength << " Bytes." << endl;
