@@ -146,14 +146,7 @@ void wavehand() {
 	int seq, ack;
 	// 接收第一次挥手请求报文，在recvfile()中已经接收了
 
-	// 发送第二次挥手应答报文
-	// 设置ack位
-	ack = (u_char)header[SEQ_BITS_START] + ((u_char)header[SEQ_BITS_START + 1] << 8)
-		+ ((u_char)header[SEQ_BITS_START + 2] << 16) + ((u_char)header[SEQ_BITS_START + 3] << 24) + 1;
-	header[ACK_BITS_START] = (u_char)(ack & 0xFF);
-	header[ACK_BITS_START + 1] = (u_char)(ack >> 8);
-	header[ACK_BITS_START + 2] = (u_char)(ack >> 16);
-	header[ACK_BITS_START + 3] = (u_char)(ack >> 24);
+	// 发送第二次挥手应答报文          
 	// 设置seq位
 	seq = rand();
 	header[SEQ_BITS_START] = (u_char)(seq & 0xFF);
@@ -163,7 +156,7 @@ void wavehand() {
 	// 设置ACK位
 	header[FLAG_BIT_POSITION] = 0b100;
 	sendto(serverSocket, header, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, sizeof(SOCKADDR));
-	cout << "send the Second Wavehand message!" << endl;
+	cout << "发送第二次挥手消息" << endl;
 
 	// 发送第三次挥手请求报文
 	// 设置seq位
@@ -176,27 +169,31 @@ void wavehand() {
 	// 设置ACK FIN位
 	header[FLAG_BIT_POSITION] = 0b101;
 	sendto(serverSocket, header, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, sizeof(SOCKADDR));
-	cout << "send the Third Wavehand message!" << endl;
+	cout << "发送第三条挥手消息" << endl;
 
 	// 接收第四次挥手应答报文
 	while (true) {
 		recvResult = recvfrom(serverSocket, recvBuf, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, &len);
 		// 检查checksum
 		checksum = checkSum(recvBuf, HEADERSIZE);
-		// 提取ack of message 4
-		ack = (u_char)recvBuf[ACK_BITS_START] + ((u_char)recvBuf[ACK_BITS_START + 1] << 8)
-			+ ((u_char)recvBuf[ACK_BITS_START + 2] << 16) + ((u_char)recvBuf[ACK_BITS_START + 3] << 24);
-		if (checksum == 0 && recvBuf[FLAG_BIT_POSITION] == 0b100) {
-			cout << "successfully received the Forth Wavehand message!" << endl;
+		if (checksum == 0) {
+			memset(header, 0, HEADERSIZE);
+			int ack = 4444;
+			header[ACK_BITS_START] = (u_char)(ack & 0xFF);
+			header[ACK_BITS_START + 1] = (u_char)(ack >> 8);
+			header[ACK_BITS_START + 2] = (u_char)(ack >> 16);
+			header[ACK_BITS_START + 3] = (u_char)(ack >> 24);
+			sendto(serverSocket, header, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, sizeof(SOCKADDR));
+			cout << "成功接收第四次挥手消息" << endl;
 			break;
 		}
 		else {
-			cout << "failed to received the correct Forth Wavehand message, Handshake failed!" << endl;
+			cout << "接收第四次挥手消息失败" << endl;
 			return;
 		}
 	}
 
-	cout << "Wavehand successfully!" << endl;
+	cout << "结束 连接！！！" << endl;
 	return;
 }
 
@@ -213,10 +210,20 @@ void recvfile() {
 
 		// 检查是否是挥手报文
 		if (recvBuf[FLAG_BIT_POSITION] == 0b101) {
+			cout << "=============================================准备断连================================================================" << endl;
 			// 记录一下seq
 			for (int i = 0; i < 4; i++) {
 				header[SEQ_BITS_START + i] = recvBuf[SEQ_BITS_START + i];
 			}
+			// 发送第一次握手应答报文
+			memset(header, 0, HEADERSIZE);
+			// 设置ack位，ack = seq of message 1 + 1
+			int ack = 1111;
+			header[ACK_BITS_START] = (u_char)(ack & 0xFF);
+			header[ACK_BITS_START + 1] = (u_char)(ack >> 8);
+			header[ACK_BITS_START + 2] = (u_char)(ack >> 16);
+			header[ACK_BITS_START + 3] = (u_char)(ack >> 24);
+			sendto(serverSocket, header, HEADERSIZE, 0, (SOCKADDR*)&clientAddr, sizeof(SOCKADDR));
 			cout << "收到了第一次挥手的消息" << endl;
 			wavehand();
 			return;
