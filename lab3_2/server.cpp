@@ -250,7 +250,7 @@ int main() {
         cout << "[ERROR]打开文件出错" << endl;
         return 0;
     }
-    cout << fileLen << endl;
+    cout <<"总共收到了 " << fileLen <<" Bytes" << endl;
     outfile.write(fileBuffer, fileLen);
     outfile.close();
 
