@@ -23,7 +23,7 @@ static int addrLen = sizeof(addrSrv);
 double MAX_TIME = CLOCKS_PER_SEC / 4;
 
 string ADDRSRV;
-static int windowSize = 8;
+static int windowSize = 1;
 static unsigned int base = 0;//握手阶段确定的初始序列号
 static unsigned int nextSeqNum = 0;
 static Packet* sendPkt = nullptr;
@@ -191,7 +191,7 @@ DWORD WINAPI ACKHandler(LPVOID param) {
         if (recvfrom(*clientSock, recvBuffer, sizeof(Packet), 0, (SOCKADDR*)&addrSrv, &addrLen) > 0) {
             // 将接收到的数据包转换为 Packet 结构体
             memcpy(&recvPacket, recvBuffer, sizeof(Packet));
-            cout << "[RECV]收到了ack" << recvPacket.head.ack << endl;
+            //cout << "[RECV]收到了ack" << recvPacket.head.ack << endl;
             // 检查 ACK 数据包的校验和以及是否包含 ACK 标志
             if (CheckPacketSum((u_short*)&recvPacket, sizeof(Packet)) == 0 && recvPacket.head.flag & ACK) {
                 // 使用互斥锁保护共享资源，即发送窗口的更新操作
@@ -218,14 +218,15 @@ DWORD WINAPI ACKHandler(LPVOID param) {
                 }
                 //mutexLock.unlock();
                 // 如果发送窗口为空，停止计时器
-                if (base == nextSeqNum) {
-                    start = clock();
-                    //stopTimer = true;
-                }
-                else {
-                    // 否则重启计时器
-                    start = clock();
-                }
+                start = clock();
+                //if (base == nextSeqNum) {
+                //    start = clock();
+                //    //stopTimer = true;
+                //}
+                //else {
+                //    // 否则重启计时器
+                //    start = clock();
+                //}
                 // 如果发送窗口基序号等于总包数，表示文件传输完成，退出线程
                 if (base == packetNum) {
                     mutexLock.unlock();
@@ -262,7 +263,6 @@ void sendFSM(u_long len, char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
 
             nEndTime = chrono::system_clock::now();
             auto duration = chrono::duration_cast<chrono::microseconds>(nEndTime - nBeginTime);
-            double lossRate = 0;
             printf("System use %lf s, and the throught is %lf Byte/s \n",
                 double(duration.count()) * chrono::microseconds::period::num /
                 chrono::microseconds::period::den, len/(double(duration.count()) * chrono::microseconds::period::num /
@@ -313,49 +313,10 @@ void sendFSM(u_long len, char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
             sendIndex++;
         }
         mutexLock.unlock();
-        /*while (recvfrom(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR *) &addr, &addrLen) > 0) {
-            memcpy(&recvPkt, pkt_buffer, sizeof(Packet));
-            //corrupt
-            if (CheckPacketSum((u_short *) &recvPkt, sizeof(Packet)) != 0 || !(recvPkt.head.flag & ACK))
-                goto time_out;
-            //not corrupt
-            if (base < (recvPkt.head.ack + 1)) {
-                int d = recvPkt.head.ack + 1 - base;
-                for (int i = 0; i < (int) waitingNum(nextSeqNum) - d; i++) {
-                    sendPkt[i] = sendPkt[i + d];
-                }
-                recvIndex += d;
-                base = (max((recvPkt.head.ack + 1), base)) % MAX_SEQ;
-                cout << "base:" << base << " nextSeq:" << nextSeqNum << " endWindow:" << base + windowSize << endl;
-            }
-            if (base == nextSeqNum)
-                stopTimer = true;
-            else {
-                start = clock();
-                stopTimer = false;
-            }
 
-        }*/
-
-
-    //time_out:
-    //    if (!stopTimer && clock() - start >= MAX_TIME) {
-    //        cout << "[time out!]resend begin" << endl;
-    //        mutexLock.lock();
-    //        for (int i = 0; i < (int)waitingNum(nextSeqNum); i++) {
-    //            memcpy(pkt_buffer, &sendPkt[i], sizeof(Packet));
-    //            sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
-    //            ShowPacket(&sendPkt[i]);
-    //        }
-    //        mutexLock.unlock();
-    //        start = clock();
-    //        stopTimer = false;
-    //    }
-
-        //time_out:
         if (clock() - start >= MAX_TIME) {
-            cout << "[time out!]resend begin" << endl;
             mutexLock.lock();
+            cout << "[time out!]resend begin" << endl;
             int resend_num = (int)waitingNum(nextSeqNum);
             for (int i = 0; i <resend_num ; i++) {
                 memcpy(pkt_buffer, &sendPkt[i], sizeof(Packet));
