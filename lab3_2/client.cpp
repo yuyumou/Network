@@ -31,6 +31,10 @@ static int sendIndex = 0;
 static clock_t start;
 static int packetNum;
 
+
+static int repeatAck = 0;
+static int repeatAckcount = 0;
+bool needquikresend = false;
 mutex mutexLock;
 
 bool connectToServer(SOCKET& socket, SOCKADDR_IN& addr) {
@@ -196,6 +200,16 @@ DWORD WINAPI ACKHandler(LPVOID param) {
             if (CheckPacketSum((u_short*)&recvPacket, sizeof(Packet)) == 0 && recvPacket.head.flag & ACK) {
                 // 使用互斥锁保护共享资源，即发送窗口的更新操作
                 mutexLock.lock();
+                if (repeatAck == recvPacket.head.ack) {
+                    repeatAckcount++;
+                    if (repeatAckcount == 2) {
+                        cout << "{ATTENTION} NEED QUICK RESEND" << endl;
+                        needquikresend = true;
+                        repeatAckcount = 0;
+                    }
+                }
+                repeatAck = recvPacket.head.ack;
+                bool islocked = true;
                 // 判断 ACK 中确认号是否在发送窗口内
                 // base <= ack,该移动窗口了
                 if (base < (recvPacket.head.ack + 1)) {
@@ -235,9 +249,14 @@ DWORD WINAPI ACKHandler(LPVOID param) {
 
                 if (recvPacket.head.windows == 1) {
                     //说明是checkSumc出了问题 重传上一个包
+                    islocked = false;
                     mutexLock.unlock();
                 }
-                mutexLock.unlock();
+                if (islocked) {
+                    islocked = false;
+                    mutexLock.unlock();
+                    
+                }
             }
 
         }
@@ -245,7 +264,7 @@ DWORD WINAPI ACKHandler(LPVOID param) {
 }
 
 void sendFSM(u_long len, char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
-
+    int waitcount = 0;
     packetNum = int(len / MAX_DATA_SIZE) + (len % MAX_DATA_SIZE ? 1 : 0);
 
     auto nBeginTime = chrono::system_clock::now();
@@ -263,10 +282,10 @@ void sendFSM(u_long len, char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
 
             nEndTime = chrono::system_clock::now();
             auto duration = chrono::duration_cast<chrono::microseconds>(nEndTime - nBeginTime);
-            printf("System use %lf s, and the throught is %lf Byte/s \n",
+            printf("System use %lf s, and the throught is %lf KByte/s \n",
                 double(duration.count()) * chrono::microseconds::period::num /
-                chrono::microseconds::period::den, len/(double(duration.count()) * chrono::microseconds::period::num /
-                chrono::microseconds::period::den));
+                chrono::microseconds::period::den, (len/1000) / (double(duration.count()) * chrono::microseconds::period::num /
+                    chrono::microseconds::period::den));
 
             CloseHandle(ackhandler);
             PacketHead endPacket;
@@ -305,7 +324,7 @@ void sendFSM(u_long len, char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
             ShowPacket(&sendPkt[(int)waitingNum(nextSeqNum)]);
             sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
             cout << "[Send]：" << sendIndex << " of " << packetNum << " 被发送" << endl;
-
+            waitcount = 0;
             if (base == nextSeqNum) {
                 start = clock();
             }
@@ -314,21 +333,24 @@ void sendFSM(u_long len, char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
         }
         mutexLock.unlock();
 
-        if (clock() - start >= MAX_TIME) {
+        if ((needquikresend )||(clock() - start >= MAX_TIME*2)) {
             mutexLock.lock();
             cout << "[time out!]resend begin" << endl;
             int resend_num = (int)waitingNum(nextSeqNum);
-            for (int i = 0; i <resend_num ; i++) {
+            for (int i = 0; i < resend_num; i++) {
                 memcpy(pkt_buffer, &sendPkt[i], sizeof(Packet));
                 sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
+                waitcount = 0;
                 //base + i
                 cout << "[RESEND] " << sendIndex - resend_num + i << " of " << packetNum << " 被重传" << endl;
                 ShowPacket(&sendPkt[i]);
             }
             //mutexLock.unlock();
             start = clock();
+            needquikresend = false;
             mutexLock.unlock();
         }
+        waitcount++;
     }
 }
 
@@ -354,6 +376,8 @@ int main() {
         cout << "[ERROR]连接失败" << endl;
         return 0;
     }
+    cout << "请输入窗口大小" << endl;
+    cin >> windowSize;
     cout << "Current windows size is " << windowSize << endl;
     sendPkt = new Packet[windowSize];
     string filename;
@@ -370,7 +394,7 @@ int main() {
     infile.seekg(0, infile.end);
     u_long fileLen = infile.tellg();
     infile.seekg(0, infile.beg);
-    cout <<"准备发送文件: "<< filename <<"文件长度为： "<< fileLen << endl;
+    cout << "准备发送文件: " << filename << "文件长度为： " << fileLen << endl;
 
     char* fileBuffer = new char[fileLen];
     infile.read(fileBuffer, fileLen);
