@@ -22,6 +22,7 @@ double MAX_WAIT_TIME = MAX_TIME / 4;
 static u_int base_stage = 0;
 static int windowSize = 0;
 
+static int losscount = 0;
 char fileBuffer[MAX_FILE_SIZE];
 
 bool acceptClient(SOCKET& socket, SOCKADDR_IN& addr) {
@@ -184,7 +185,7 @@ u_long recvFSM(char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
                 clockStart = true;
                 continue;
             }
-            else if (clock() - start >= MAX_WAIT_TIME) {
+            else if (clock() - start >= MAX_WAIT_TIME*2) {
                 clockStart = false;
                 cout << "[SEND] ACKED before " << expectedSeq << endl;
             }
@@ -205,7 +206,7 @@ u_long recvFSM(char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
             sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
             continue;
         }
-        cout << "Not the Expected Seq Resend the last ack: "<<expectedSeq << endl;
+        cout << "Not the Expected Seq Resend the last ack: " << expectedSeq << endl;
         memcpy(pkt_buffer, &sendPkt, sizeof(Packet));
         sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
     }
@@ -250,7 +251,7 @@ int main() {
         cout << "[ERROR]打开文件出错" << endl;
         return 0;
     }
-    cout <<"总共收到了 " << fileLen <<" Bytes" << endl;
+    cout << "总共收到了 " << fileLen << " Bytes" << endl;
     outfile.write(fileBuffer, fileLen);
     outfile.close();
 
