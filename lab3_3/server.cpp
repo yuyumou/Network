@@ -21,7 +21,7 @@ using namespace std;
 double MAX_TIME = CLOCKS_PER_SEC / 4;
 double MAX_WAIT_TIME = MAX_TIME / 4;
 static u_int base_stage = 0;
-static int windowSize = 8;
+static int windowSize = 32;
 static Packet* sendArr = nullptr;
 static int base = 0;
 static int sendCount = 0;
@@ -204,53 +204,55 @@ u_long recvFSM(char* fileBuffer, SOCKET& socket, SOCKADDR_IN& addr) {
             //sendArr[recvPkt.head.seq - base] = recvPkt;
             //sendArr[recvPkt.head.seq - base].head.ack = recvPkt.head.seq;
             //sendArr[recvPkt.head.seq - base].data = recvPkt.data;
+            
+            //将数据保存下来，SR
             memcpy( &sendArr[recvPkt.head.seq - base].data,recvPkt.data, recvPkt.head.bufSize );
             sendArr[recvPkt.head.seq - base].isAck = true;
+            //传回ACK
             memcpy(pkt_buffer, &sendArr[recvPkt.head.seq - base], sizeof(Packet));
             sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
             cout << "[SEND ACK]" << recvPkt.head.seq << endl;
-            sendCount++;
-            if ((sendArr[0].head.ack == base) && sendCount == 1) {//move window
+            
+            if ((sendArr[0].head.ack == base)) {//move window
+                bool flag = true;
+                int movecount = 0;
                 base += 1;
-                sendCount = 0;
-                cout << "[Window Move To]" << base << endl;
-                dataLen = recvPkt.head.bufSize;
-                memcpy(fileBuffer + fileLen, sendArr[0].data, dataLen);
-                fileLen += dataLen;
-            }
-            else if ((sendArr[0].head.ack == base) && sendCount != 1) {
-                base += 1;
-                sendCount = 0;
+                movecount++;
                 cout << "[Window Move To]" << base << endl;
                 dataLen = recvPkt.head.bufSize;
                 memcpy(fileBuffer + fileLen, sendArr[0].data, dataLen);
                 fileLen += dataLen;
                 for (int i = 1; i < windowSize; i++) {
                     if (sendArr[i].head.ack == base) {
+                        flag = false;
                         base += 1;
-                        cout << "[Window Move To]" << base << endl;
+                        movecount++;
                         dataLen = recvPkt.head.bufSize;
                         memcpy(fileBuffer + fileLen, sendArr[i].data, dataLen);
                         fileLen += dataLen;
                     }
                     else {
+                        for (int j = 0; j < windowSize - movecount; j++) {
+                            sendArr[j] = sendArr[j + movecount];
+                            sendArr[j + movecount].head.ack = -1;
+                        }
+                        if(!flag)
+                            cout << "[Window Move To]" << base << endl;
                         break;
                     }
                 }
             }
-   
             continue;
         }
         if (CheckPacketSum((u_short*)&recvPkt, sizeof(Packet)) != 0) {
             //cout << sizeof(Packet) << endl;
             cout << "CheckSun Wrong  " << CheckPacketSum((u_short*)&recvPkt, sizeof(Packet)) << endl;
- /*           Packet wrongSumpkt;
-            wrongSumpkt.head.ack = expectedSeq;
+            Packet wrongSumpkt;
+            wrongSumpkt.head.ack = -1;
             wrongSumpkt.head.flag |= ACK;
-            wrongSumpkt.head.windows = 1;
             wrongSumpkt.head.checkSum = CheckPacketSum((u_short*)&wrongSumpkt, sizeof(Packet));
             memcpy(pkt_buffer, &wrongSumpkt, sizeof(Packet));
-            sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);*/
+            sendto(socket, pkt_buffer, sizeof(Packet), 0, (SOCKADDR*)&addr, addrLen);
             continue;
         }
 
@@ -288,6 +290,7 @@ int main() {
     //char fileBuffer[MAX_FILE_SIZE];
     //可靠数据传输过程
     sendArr = new Packet[windowSize];
+    string recvfile_name;
 
     u_long fileLen = recvFSM(fileBuffer, sockSrv, addrClient);
     //四次挥手断开连接
