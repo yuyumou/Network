@@ -22,7 +22,7 @@ static int addrLen = sizeof(addrSrv);
 double MAX_TIME = CLOCKS_PER_SEC / 4;
 
 string ADDRSRV;
-static int windowSize = 8;
+static int windowSize = 32;
 static unsigned int base = 0;//握手阶段确定的初始序列号
 static unsigned int nextSeqNum = 0;
 static Packet* sendPkt = nullptr;
@@ -178,7 +178,7 @@ u_int waitingNum(u_int nextSeq) {
 }
 
 bool inWindows(u_int seq) {
-    if (seq >= base && seq < base + windowSize)
+    if (seq >= base && seq < base + windowSize  )
         return true;
     if (seq < base && seq < ((base + windowSize) % MAX_SEQ))
         return true;
@@ -216,12 +216,11 @@ DWORD WINAPI ACKHandler(LPVOID param) {
                 }
                 repeatAck = recvPacket.head.ack;
                 bool islocked = true;*/
+                bool islocked = true;
                 bool isTomovewindow = false;
                 u_int nextToackSeq = 0;
                 // 判断 ACK 中确认号是否在发送窗口内
                 // base <= ack 且从base到新的都被确认；该移动窗口了
-                // gh is d in before
-                //int gh = recvPacket.head.ack + 1 - base;
                 if ((sendPkt[0].isAck == false) && (base == recvPacket.head.ack)) {
                     isTomovewindow = true;
                     nextToackSeq = base;//sendPkt[0].head.ack;
@@ -241,9 +240,12 @@ DWORD WINAPI ACKHandler(LPVOID param) {
                     }
                 }
                 if (recvPacket.head.ack >= base) {
+                    if (base == 226) {
+                        int a = 1;
+                    }
                     sendPkt[recvPacket.head.ack - base].isAck = true;
                     sendPkt[recvPacket.head.ack - base].start = clock();
-                    cout << "[RECV] " << base << " is ACKED" << endl;
+                    cout << "[RECV] " << recvPacket.head.ack << " is ACKED" << endl;
                 }
                 if (isTomovewindow) {
                     isTomovewindow = false;
@@ -252,13 +254,15 @@ DWORD WINAPI ACKHandler(LPVOID param) {
                     // 将发送窗口中已经确认的数据包移出窗口
                     assert(sendPkt != nullptr);
                     // move all before nextseq after acked to the begin
-                    for (int i = 0; i < (int)waitingNum(nextSeqNum) - d; i++) {
+                    //for (int i = 0; i < (int)waitingNum(nextSeqNum) - d; i++) {
+                    for (int i = 0; i < windowSize - d; i++) {
                         sendPkt[i] = sendPkt[i + d];
+                        sendPkt[i + d].isAck = false;
                     }
                     ShowPacket(&recvPacket);
                     // 更新 base before base is acked 
                     base = (max((nextToackSeq+1), base)) % MAX_SEQ;
-                    cout << "[MOVE WINDOW TO]" << base << endl;
+                    cout << "[MOVE WINDOW BASE TO]" << base << endl;
 #ifdef OUTPUT_LOG
                     cout << "[window move]base:" << base << " nextSeq:" << nextSeqNum << " endWindow:"
                         << base + windowSize << endl;
@@ -281,16 +285,15 @@ DWORD WINAPI ACKHandler(LPVOID param) {
                     return 0;
                 }
 
-                //if (recvPacket.head.windows == 1) {
-                //    //说明是checkSumc出了问题 重传上一个包
-                //    islocked = false;
-                //    mutexLock.unlock();
-                //}
-                //if (islocked) {
-                //    islocked = false;
+                if (recvPacket.head.windows == 1) {
+                    //说明是checkSumc出了问题 重传上一个包
+                    islocked = false;
                     mutexLock.unlock();
-
-                //}
+                }
+                if (islocked) {
+                    islocked = false;
+                    mutexLock.unlock();
+                }
             }
 
         }
